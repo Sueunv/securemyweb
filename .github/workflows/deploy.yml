@@ -40,7 +40,7 @@ jobs:
         docker push $ECR_BACKEND_REPO:latest
 
     - name: Build and push Frontend Docker image
-      working-directory: ./frontend
+      working-directory: ./frontend/frontend_backup
       run: |
         docker build -t $ECR_FRONTEND_REPO:latest .
         docker push $ECR_FRONTEND_REPO:latest
