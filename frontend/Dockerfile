@@ -5,12 +5,10 @@ WORKDIR /app
 
 # Copy only package files first to install deps (including react-scripts)
 COPY package.json package-lock.json ./
-
 RUN npm install
 
 # Now copy everything else (like src/, public/, etc.)
 COPY . .
-
 RUN npm run build
 
 # ===== Production Stage =====
