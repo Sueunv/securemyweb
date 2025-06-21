@@ -6,13 +6,11 @@ on:
 
 jobs:
   deploy:
-    runs-on: self-hosted
+    runs-on: self-hosted  # Web EC2 runner
 
     steps:
-    - name: Checkout code
+    - name: Checkout repository
       uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v2
@@ -24,27 +22,31 @@ jobs:
     - name: Login to Amazon ECR
       uses: aws-actions/amazon-ecr-login@v1
 
-    - name: Build and push Backend Docker image
+    - name: Build and push Backend image
       working-directory: ./backend
       run: |
-        echo "Backend Image: ${{ secrets.ECR_BACKEND_REPO }}"
+        echo "Building backend image"
         docker build -t ${{ secrets.ECR_BACKEND_REPO }}:latest .
         docker push ${{ secrets.ECR_BACKEND_REPO }}:latest
 
-    - name: Build and push Frontend Docker image
+    - name: Build and push Frontend image
       working-directory: ./frontend
       run: |
-        echo "Frontend Image: ${{ secrets.ECR_FRONTEND_REPO }}"
+        echo "Building frontend image"
         docker build -t ${{ secrets.ECR_FRONTEND_REPO }}:latest .
         docker push ${{ secrets.ECR_FRONTEND_REPO }}:latest
 
-    - name: 🔍 [DEBUG] Test SSH Key to Web EC2
+    - name: Decode SSH key
       run: |
-        echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > debug.pem
-        chmod 400 debug.pem
-        ssh -i debug.pem -o StrictHostKeyChecking=no ec2-user@${{ secrets.WEB_INSTANCE_PUBLIC_IP }} "echo ✅ Connected to Web EC2 && uname -a"
+        echo "Decoding SSH key"
+        echo "${{ secrets.EC2_SSH_PRIVATE_KEY_B64 }}" | base64 -d > gitkey.pem
+        chmod 400 gitkey.pem
 
-    - name: Deploy Backend on App EC2 (Private Subnet)
+    - name: Debug SSH access to Web EC2
+      run: |
+        ssh -o StrictHostKeyChecking=no -i gitkey.pem ec2-user@${{ secrets.WEB_INSTANCE_PUBLIC_IP }} "echo '✅ Connected to Web EC2' && uname -a"
+
+    - name: Deploy Backend on App EC2
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.APP_INSTANCE_PRIVATE_IP }}
@@ -63,9 +65,8 @@ jobs:
             -e DB_PASS="${{ secrets.DB_PASS }}" \
             -e DB_PORT="${{ secrets.DB_PORT }}" \
             ${{ secrets.ECR_BACKEND_REPO }}:latest
-        args: "-o StrictHostKeyChecking=no"
 
-    - name: Deploy Frontend on Web EC2 (Public Subnet)
+    - name: Deploy Frontend on Web EC2
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.WEB_INSTANCE_PUBLIC_IP }}
@@ -80,7 +81,6 @@ jobs:
             -p 3000:80 \
             ${{ secrets.ECR_FRONTEND_REPO }}:latest
           sudo systemctl restart nginx
-        args: "-o StrictHostKeyChecking=no"
 
     - name: ✅ Deployment Complete
       run: echo "🎉 All services deployed successfully!"
