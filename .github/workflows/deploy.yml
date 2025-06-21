@@ -23,7 +23,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
       with:
-        fetch-depth: 0  # 👈 Force full checkout
+        fetch-depth: 0
 
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v2
@@ -32,7 +32,7 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ secrets.AWS_REGION }}
 
-    - name: Log in to ECR
+    - name: Log in to Amazon ECR
       uses: aws-actions/amazon-ecr-login@v1
 
     - name: Build and push Backend Docker image
@@ -54,8 +54,10 @@ jobs:
         username: ec2-user
         key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
         script: |
+          BACKEND_REPO="${{ secrets.ECR_BACKEND_REPO }}"
+          echo "Using backend image: $BACKEND_REPO:latest"
           docker rm -f backend-container || true
-          docker pull $ECR_BACKEND_REPO:latest
+          docker pull $BACKEND_REPO:latest
           docker run -d \
             --name backend-container \
             -p 5000:5000 \
@@ -63,7 +65,7 @@ jobs:
             -e DB_NAME=${{ secrets.DB_NAME }} \
             -e DB_USER=${{ secrets.DB_USER }} \
             -e DB_PASS=${{ secrets.DB_PASS }} \
-            $ECR_BACKEND_REPO:latest
+            $BACKEND_REPO:latest
 
     - name: Deploy to Web EC2
       uses: appleboy/ssh-action@v1.0.0
@@ -72,9 +74,14 @@ jobs:
         username: ec2-user
         key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
         script: |
+          FRONTEND_REPO="${{ secrets.ECR_FRONTEND_REPO }}"
+          echo "Using frontend image: $FRONTEND_REPO:latest"
           docker rm -f frontend-container || true
-          docker pull $ECR_FRONTEND_REPO:latest
-          docker run -d --name frontend-container -p 3000:80 $ECR_FRONTEND_REPO:latest
+          docker pull $FRONTEND_REPO:latest
+          docker run -d \
+            --name frontend-container \
+            -p 3000:80 \
+            $FRONTEND_REPO:latest
           sudo systemctl restart nginx
 
     - name: ✅ Done
