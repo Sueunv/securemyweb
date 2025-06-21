@@ -6,7 +6,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: self-hosted # Your self-hosted runner on Web EC2
+    runs-on: self-hosted
 
     steps:
     - name: Checkout code
@@ -14,14 +14,14 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Configure AWS Credentials
+    - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v2
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ secrets.AWS_REGION }}
 
-    - name: Log in to Amazon ECR
+    - name: Login to Amazon ECR
       uses: aws-actions/amazon-ecr-login@v1
 
     - name: Build and push Backend Docker image
@@ -38,6 +38,12 @@ jobs:
         docker build -t ${{ secrets.ECR_FRONTEND_REPO }}:latest .
         docker push ${{ secrets.ECR_FRONTEND_REPO }}:latest
 
+    - name: 🔍 [DEBUG] Test SSH Key to Web EC2
+      run: |
+        echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > debug.pem
+        chmod 400 debug.pem
+        ssh -i debug.pem -o StrictHostKeyChecking=no ec2-user@${{ secrets.WEB_INSTANCE_PUBLIC_IP }} "echo ✅ Connected to Web EC2 && uname -a"
+
     - name: Deploy Backend on App EC2 (Private Subnet)
       uses: appleboy/ssh-action@v1.0.0
       with:
@@ -46,10 +52,8 @@ jobs:
         key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
         script: |
           echo "Deploying backend from ${{ secrets.ECR_BACKEND_REPO }}"
-
           docker rm -f backend-container || true
           docker pull ${{ secrets.ECR_BACKEND_REPO }}:latest
-
           docker run -d \
             --name backend-container \
             -p 5000:5000 \
@@ -59,6 +63,7 @@ jobs:
             -e DB_PASS="${{ secrets.DB_PASS }}" \
             -e DB_PORT="${{ secrets.DB_PORT }}" \
             ${{ secrets.ECR_BACKEND_REPO }}:latest
+        args: "-o StrictHostKeyChecking=no"
 
     - name: Deploy Frontend on Web EC2 (Public Subnet)
       uses: appleboy/ssh-action@v1.0.0
@@ -68,16 +73,15 @@ jobs:
         key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
         script: |
           echo "Deploying frontend from ${{ secrets.ECR_FRONTEND_REPO }}"
-
           docker rm -f frontend-container || true
           docker pull ${{ secrets.ECR_FRONTEND_REPO }}:latest
-
           docker run -d \
             --name frontend-container \
             -p 3000:80 \
             ${{ secrets.ECR_FRONTEND_REPO }}:latest
-
           sudo systemctl restart nginx
+        args: "-o StrictHostKeyChecking=no"
 
     - name: ✅ Deployment Complete
       run: echo "🎉 All services deployed successfully!"
+
