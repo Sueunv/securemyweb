@@ -2,7 +2,8 @@ name: Deploy Fullstack App
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   deploy:
@@ -32,7 +33,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Log in to Amazon ECR
+      - name: Log in to ECR
         uses: aws-actions/amazon-ecr-login@v1
 
       - name: Build and push Backend Docker image
@@ -82,5 +83,5 @@ jobs:
             sudo systemctl restart nginx
 
       - name: ✅ Done
-        run: echo "Deployment complete!"
+        run: echo "✅ Deployment complete!"
 
